@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+C:/Users/ianat/esp_projects/usb_hid_example/build/CMakeFiles/bootloader
+C:/Users/ianat/esp_projects/usb_hid_example/build/CMakeFiles/bootloader.rule
+C:/Users/ianat/esp_projects/usb_hid_example/build/CMakeFiles/bootloader-complete.rule
+C:/Users/ianat/esp_projects/usb_hid_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+C:/Users/ianat/esp_projects/usb_hid_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+C:/Users/ianat/esp_projects/usb_hid_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+C:/Users/ianat/esp_projects/usb_hid_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+C:/Users/ianat/esp_projects/usb_hid_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+C:/Users/ianat/esp_projects/usb_hid_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+C:/Users/ianat/esp_projects/usb_hid_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
