@@ -1,0 +1,28 @@
+# Ignore build output
+/build/
+/*.elf
+/*.bin
+/*.map
+
+# ESP-IDF specific
+sdkconfig.old
+sdkconfig.defaults
+*.pyc
+*.pyo
+__pycache__/
+
+# VS Code and editor configs
+.vscode/
+*.swp
+*.swo
+*.DS_Store
+
+# CMake and Ninja artifacts
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+Makefile
+
+# Logs
+*.log
