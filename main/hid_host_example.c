@@ -7,11 +7,13 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
-#include <unistd.h>
+#include <unistd.h> // For close()
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "freertos/queue.h"
+
 #include "esp_err.h"
 #include "esp_log.h"
 #include "usb/usb_host.h"
@@ -21,30 +23,25 @@
 #include "usb/hid_host.h"
 #include "usb/hid_usage_keyboard.h"
 #include "usb/hid_usage_mouse.h"
+
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "nvs_flash.h"
-#include "esp_log.h"
-#include "freertos/event_groups.h"
 #include "lwip/sockets.h"
 #include "lwip/netdb.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-
-
-
 /* GPIO Pin number for quit from example logic */
 #define APP_QUIT_PIN                GPIO_NUM_0
-#define WIFI_SSID      "Fractavisual"
-#define WIFI_PASS      "lsala123"
+#define WIFI_SSID                   "Fractavisual"
+#define WIFI_PASS                   "lsala123"
 
 #define WIFI_CONNECTED_BIT BIT0
-#define PC_IP_ADDR   "172.16.0.15"  // <-- CHANGE THIS to your PC IP
-#define PC_UDP_PORT  8888
-
+#define PC_IP_ADDR          "172.16.0.15"   // <-- CHANGE THIS to your PC IP
+#define PC_UDP_PORT         8888
 
 static EventGroupHandle_t wifi_event_group;
 static const char *TAG_WIFI = "wifi";
@@ -56,11 +53,11 @@ QueueHandle_t app_event_queue = NULL;
 /**
  * @brief APP event group
  *
- * Application logic can be different. There is a one among other ways to distingiush the
+ * Application logic can be different. There is a one among other ways to distingiuish the
  * event by application event group.
  * In this example we have two event groups:
- * APP_EVENT            - General event, which is APP_QUIT_PIN press event (Generally, it is IO0).
- * APP_EVENT_HID_HOST   - HID Host Driver event, such as device connection/disconnection or input report.
+ * APP_EVENT           - General event, which is APP_QUIT_PIN press event (Generally, it is IO0).
+ * APP_EVENT_HID_HOST  - HID Host Driver event, such as device connection/disconnection or input report.
  */
 typedef enum {
     APP_EVENT = 0,
@@ -111,75 +108,72 @@ typedef struct {
 static char rfid_buffer[RFID_BUFFER_SIZE];
 static int rfid_index = 0;
 
-extern int udp_sock;
-extern struct sockaddr_in pc_addr;
-// ✅ UDP socket and destination address
+// ✅ Global UDP socket and destination address, initialized once
 int udp_sock = -1;
 struct sockaddr_in pc_addr;
-
 
 
 /**
  * @brief Scancode to ascii table
  */
 const uint8_t keycode2ascii [57][2] = {
-    {0, 0}, /* HID_KEY_NO_PRESS        */
-    {0, 0}, /* HID_KEY_ROLLOVER        */
-    {0, 0}, /* HID_KEY_POST_FAIL       */
+    {0, 0}, /* HID_KEY_NO_PRESS            */
+    {0, 0}, /* HID_KEY_ROLLOVER            */
+    {0, 0}, /* HID_KEY_POST_FAIL           */
     {0, 0}, /* HID_KEY_ERROR_UNDEFINED */
-    {'a', 'A'}, /* HID_KEY_A               */
-    {'b', 'B'}, /* HID_KEY_B               */
-    {'c', 'C'}, /* HID_KEY_C               */
-    {'d', 'D'}, /* HID_KEY_D               */
-    {'e', 'E'}, /* HID_KEY_E               */
-    {'f', 'F'}, /* HID_KEY_F               */
-    {'g', 'G'}, /* HID_KEY_G               */
-    {'h', 'H'}, /* HID_KEY_H               */
-    {'i', 'I'}, /* HID_KEY_I               */
-    {'j', 'J'}, /* HID_KEY_J               */
-    {'k', 'K'}, /* HID_KEY_K               */
-    {'l', 'L'}, /* HID_KEY_L               */
-    {'m', 'M'}, /* HID_KEY_M               */
-    {'n', 'N'}, /* HID_KEY_N               */
-    {'o', 'O'}, /* HID_KEY_O               */
-    {'p', 'P'}, /* HID_KEY_P               */
-    {'q', 'Q'}, /* HID_KEY_Q               */
-    {'r', 'R'}, /* HID_KEY_R               */
-    {'s', 'S'}, /* HID_KEY_S               */
-    {'t', 'T'}, /* HID_KEY_T               */
-    {'u', 'U'}, /* HID_KEY_U               */
-    {'v', 'V'}, /* HID_KEY_V               */
-    {'w', 'W'}, /* HID_KEY_W               */
-    {'x', 'X'}, /* HID_KEY_X               */
-    {'y', 'Y'}, /* HID_KEY_Y               */
-    {'z', 'Z'}, /* HID_KEY_Z               */
-    {'1', '!'}, /* HID_KEY_1               */
-    {'2', '@'}, /* HID_KEY_2               */
-    {'3', '#'}, /* HID_KEY_3               */
-    {'4', '$'}, /* HID_KEY_4               */
-    {'5', '%'}, /* HID_KEY_5               */
-    {'6', '^'}, /* HID_KEY_6               */
-    {'7', '&'}, /* HID_KEY_7               */
-    {'8', '*'}, /* HID_KEY_8               */
-    {'9', '('}, /* HID_KEY_9               */
-    {'0', ')'}, /* HID_KEY_0               */
-    {KEYBOARD_ENTER_MAIN_CHAR, KEYBOARD_ENTER_MAIN_CHAR}, /* HID_KEY_ENTER           */
-    {0, 0}, /* HID_KEY_ESC             */
-    {'\b', 0}, /* HID_KEY_DEL             */
-    {0, 0}, /* HID_KEY_TAB             */
-    {' ', ' '}, /* HID_KEY_SPACE           */
-    {'-', '_'}, /* HID_KEY_MINUS           */
-    {'=', '+'}, /* HID_KEY_EQUAL           */
+    {'a', 'A'}, /* HID_KEY_A                       */
+    {'b', 'B'}, /* HID_KEY_B                       */
+    {'c', 'C'}, /* HID_KEY_C                       */
+    {'d', 'D'}, /* HID_KEY_D                       */
+    {'e', 'E'}, /* HID_KEY_E                       */
+    {'f', 'F'}, /* HID_KEY_F                       */
+    {'g', 'G'}, /* HID_KEY_G                       */
+    {'h', 'H'}, /* HID_KEY_H                       */
+    {'i', 'I'}, /* HID_KEY_I                       */
+    {'j', 'J'}, /* HID_KEY_J                       */
+    {'k', 'K'}, /* HID_KEY_K                       */
+    {'l', 'L'}, /* HID_KEY_L                       */
+    {'m', 'M'}, /* HID_KEY_M                       */
+    {'n', 'N'}, /* HID_KEY_N                       */
+    {'o', 'O'}, /* HID_KEY_O                       */
+    {'p', 'P'}, /* HID_KEY_P                       */
+    {'q', 'Q'}, /* HID_KEY_Q                       */
+    {'r', 'R'}, /* HID_KEY_R                       */
+    {'s', 'S'}, /* HID_KEY_S                       */
+    {'t', 'T'}, /* HID_KEY_T                       */
+    {'u', 'U'}, /* HID_KEY_U                       */
+    {'v', 'V'}, /* HID_KEY_V                       */
+    {'w', 'W'}, /* HID_KEY_W                       */
+    {'x', 'X'}, /* HID_KEY_X                       */
+    {'y', 'Y'}, /* HID_KEY_Y                       */
+    {'z', 'Z'}, /* HID_KEY_Z                       */
+    {'1', '!'}, /* HID_KEY_1                       */
+    {'2', '@'}, /* HID_KEY_2                       */
+    {'3', '#'}, /* HID_KEY_3                       */
+    {'4', '$'}, /* HID_KEY_4                       */
+    {'5', '%'}, /* HID_KEY_5                       */
+    {'6', '^'}, /* HID_KEY_6                       */
+    {'7', '&'}, /* HID_KEY_7                       */
+    {'8', '*'}, /* HID_KEY_8                       */
+    {'9', '('}, /* HID_KEY_9                       */
+    {'0', ')'}, /* HID_KEY_0                       */
+    {KEYBOARD_ENTER_MAIN_CHAR, KEYBOARD_ENTER_MAIN_CHAR}, /* HID_KEY_ENTER                   */
+    {0, 0}, /* HID_KEY_ESC                     */
+    {'\b', 0}, /* HID_KEY_DEL                     */
+    {0, 0}, /* HID_KEY_TAB                     */
+    {' ', ' '}, /* HID_KEY_SPACE                   */
+    {'-', '_'}, /* HID_KEY_MINUS                   */
+    {'=', '+'}, /* HID_KEY_EQUAL                   */
     {'[', '{'}, /* HID_KEY_OPEN_BRACKET    */
     {']', '}'}, /* HID_KEY_CLOSE_BRACKET   */
     {'\\', '|'}, /* HID_KEY_BACK_SLASH      */
-    {'\\', '|'}, /* HID_KEY_SHARP           */  // HOTFIX: for NonUS Keyboards repeat HID_KEY_BACK_SLASH
-    {';', ':'}, /* HID_KEY_COLON           */
-    {'\'', '"'}, /* HID_KEY_QUOTE           */
-    {'`', '~'}, /* HID_KEY_TILDE           */
-    {',', '<'}, /* HID_KEY_LESS            */
-    {'.', '>'}, /* HID_KEY_GREATER         */
-    {'/', '?'} /* HID_KEY_SLASH           */
+    {'\\', '|'}, /* HID_KEY_SHARP                   */    // HOTFIX: for NonUS Keyboards repeat HID_KEY_BACK_SLASH
+    {';', ':'}, /* HID_KEY_COLON                   */
+    {'\'', '"'}, /* HID_KEY_QUOTE                   */
+    {'`', '~'}, /* HID_KEY_TILDE                   */
+    {',', '<'}, /* HID_KEY_LESS                    */
+    {'.', '>'}, /* HID_KEY_GREATER                 */
+    {'/', '?'} /* HID_KEY_SLASH                   */
 };
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
@@ -274,7 +268,7 @@ static void hid_print_new_device_report_header(hid_protocol_t proto)
  * @brief HID Keyboard modifier verification for capitalization application (right or left shift)
  *
  * @param[in] modifier
- * @return true  Modifier was pressed (left or right shift)
+ * @return true    Modifier was pressed (left or right shift)
  * @return false Modifier was not pressed (left or right shift)
  *
  */
@@ -294,7 +288,7 @@ static inline bool hid_keyboard_is_modifier_shift(uint8_t modifier)
  * @param[in] key_code  Keyboard key code
  * @param[in] key_char  Pointer to key char data
  *
- * @return true  Key scancode converted successfully
+ * @return true    Key scancode converted successfully
  * @return false Key scancode unknown
  */
 static inline bool hid_keyboard_get_char(uint8_t modifier,
@@ -348,7 +342,7 @@ static void key_event_callback(key_event_t *key_event)
             hid_keyboard_print_char(key_char);
 
             if (key_char == '\r') {
-                rfid_buffer[rfid_index] = '\0';  // Null-terminate
+                rfid_buffer[rfid_index] = '\0';    // Null-terminate
 
                 if (udp_sock >= 0 && rfid_index > 0) {
                     ESP_LOGI(TAG, "Sending RFID tag: %s", rfid_buffer);
@@ -368,8 +362,11 @@ static void key_event_callback(key_event_t *key_event)
                 rfid_index = 0;
                 memset(rfid_buffer, 0, RFID_BUFFER_SIZE);
             } else {
-                if (rfid_index < RFID_BUFFER_SIZE - 1) {
+                if (rfid_index < RFID_BUFFER_SIZE - 1) { // Leave space for null terminator
                     rfid_buffer[rfid_index++] = key_char;
+                } else {
+                    ESP_LOGW(TAG, "RFID buffer full, discarding character: %c", key_char);
+                    // Optionally, reset buffer here or handle error differently
                 }
             }
         }
@@ -398,8 +395,8 @@ static inline bool key_found(const uint8_t *const src,
 /**
  * @brief USB HID Host Keyboard Interface report callback handler
  *
- * @param[in] data    Pointer to input report data buffer
- * @param[in] length  Length of input report data buffer
+ * @param[in] data      Pointer to input report data buffer
+ * @param[in] length    Length of input report data buffer
  */
 static void hid_host_keyboard_report_callback(const uint8_t *const data, const int length)
 {
@@ -439,8 +436,8 @@ static void hid_host_keyboard_report_callback(const uint8_t *const data, const i
 /**
  * @brief USB HID Host Mouse Interface report callback handler
  *
- * @param[in] data    Pointer to input report data buffer
- * @param[in] length  Length of input report data buffer
+ * @param[in] data      Pointer to input report data buffer
+ * @param[in] length    Length of input report data buffer
  */
 static void hid_host_mouse_report_callback(const uint8_t *const data, const int length)
 {
@@ -471,8 +468,8 @@ static void hid_host_mouse_report_callback(const uint8_t *const data, const int 
  *
  * 'generic' means anything else than mouse or keyboard
  *
- * @param[in] data    Pointer to input report data buffer
- * @param[in] length  Length of input report data buffer
+ * @param[in] data      Pointer to input report data buffer
+ * @param[in] length    Length of input report data buffer
  */
 static void hid_host_generic_report_callback(const uint8_t *const data, const int length)
 {
@@ -502,9 +499,9 @@ void hid_host_interface_callback(hid_host_device_handle_t hid_device_handle,
     switch (event) {
     case HID_HOST_INTERFACE_EVENT_INPUT_REPORT:
         ESP_ERROR_CHECK(hid_host_device_get_raw_input_report_data(hid_device_handle,
-                                                                  data,
-                                                                  64,
-                                                                  &data_length));
+                                                                    data,
+                                                                    64,
+                                                                    &data_length));
 
         if (HID_SUBCLASS_BOOT_INTERFACE == dev_params.sub_class) {
             if (HID_PROTOCOL_KEYBOARD == dev_params.proto) {
@@ -574,7 +571,7 @@ void hid_host_device_event(hid_host_device_handle_t hid_device_handle,
 /**
  * @brief Start USB Host install and handle common USB host library events while app pin not low
  *
- * @param[in] arg  Not used
+ * @param[in] arg   Not used
  */
 static void usb_lib_task(void *arg)
 {
@@ -599,7 +596,7 @@ static void usb_lib_task(void *arg)
 
     ESP_LOGI(TAG, "USB shutdown");
     // Clean up USB Host
-    vTaskDelay(10); // Short delay to allow clients clean-up
+    vTaskDelay(10 / portTICK_PERIOD_MS); // Short delay to allow clients clean-up
     ESP_ERROR_CHECK(usb_host_uninstall());
     vTaskDelete(NULL);
 }
@@ -653,23 +650,79 @@ void hid_host_device_callback(hid_host_device_handle_t hid_device_handle,
     }
 }
 
+/**
+ * @brief Task to simulate proxy sensor readings and send them via UDP.
+ */
+void proxy_sensor_task(void *pvParameters) {
+    ESP_LOGI(TAG, "Proxy sensor task started");
+    int simulated_distance = 0; // Simulate a changing sensor value
+    bool triggered_once_flag = false; // Flag to ensure UDP is sent only once per trigger event
+
+    while (1) {
+        // Wait for Wi-Fi to be connected before attempting to send UDP packets
+        xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
+
+        // Simulate sensor reading
+        simulated_distance = (simulated_distance + 1) % 100; // Value from 0 to 99
+
+        // Define the approximate 2 feet range (e.g., 23 to 25 units, assuming units are inches)
+        if (simulated_distance >= 23 && simulated_distance <= 25) {
+            // Check if it's the first time we've entered this range
+            if (!triggered_once_flag) {
+                if (udp_sock >= 0) {
+                    char sensor_data[64];
+                    // Construct the message to send
+                    snprintf(sensor_data, sizeof(sensor_data), "TRIGGERED_DISTANCE: %d (approx 2ft)", simulated_distance);
+
+                    ESP_LOGI(TAG, "Sending triggered sensor data: %s", sensor_data);
+                    int err = sendto(udp_sock, sensor_data, strlen(sensor_data), 0,
+                                     (struct sockaddr *)&pc_addr, sizeof(pc_addr));
+                    if (err < 0) {
+                        ESP_LOGE(TAG, "Failed to send triggered sensor data: errno %d", errno);
+                    } else {
+                        ESP_LOGI(TAG, "Sent %d bytes of triggered sensor data", err);
+                    }
+                } else {
+                    ESP_LOGW(TAG, "UDP socket not ready for triggered sensor data.");
+                }
+                triggered_once_flag = true; // Set the flag so it doesn't send again until it leaves and re-enters the range
+            }
+        } else {
+            // Reset the flag when the distance is outside the trigger range
+            triggered_once_flag = false;
+        }
+
+        // Add a small delay for simulation
+        // Changed to 1 second for more frequent updates; adjust as needed for your application
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+    vTaskDelete(NULL);
+}
+
 void app_main(void)
 {
     ESP_ERROR_CHECK(nvs_flash_init());
 
     wifi_init_sta();  // Connect to Wi-Fi before sending UDP
+
+    // ✅ Initialize UDP socket and address once
     udp_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (udp_sock < 0) {
-    ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+        ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+        // It might be appropriate to handle this error more gracefully,
+        // e.g., by retrying or halting, depending on your application's requirements.
+        // For now, we'll continue but subsequent sendto calls will fail.
     } else {
-    ESP_LOGI(TAG, "UDP socket created");
+        ESP_LOGI(TAG, "UDP socket created");
     }
+
     memset(&pc_addr, 0, sizeof(pc_addr));
     pc_addr.sin_family = AF_INET;
-    pc_addr.sin_port = htons(8888);  // Must match PC listener port
+    pc_addr.sin_port = htons(PC_UDP_PORT);
+    inet_pton(AF_INET, PC_IP_ADDR, &pc_addr.sin_addr);
 
-// Replace this with your PC's real IP!
-    inet_pton(AF_INET, "172.16.0.15", &pc_addr.sin_addr);
+    // Create the proxy sensor task
+    xTaskCreate(proxy_sensor_task, "proxy_sensor_task", 4096, NULL, 5, NULL); // Adjust stack size and priority as needed
 
 
     BaseType_t task_created;
@@ -689,29 +742,29 @@ void app_main(void)
     ESP_ERROR_CHECK(gpio_isr_handler_add(APP_QUIT_PIN, gpio_isr_cb, NULL));
 
     /*
-    * Create usb_lib_task to:
-    * - initialize USB Host library
-    * - Handle USB Host events while APP pin in in HIGH state
-    */
+     * Create usb_lib_task to:
+     * - initialize USB Host library
+     * - Handle USB Host events while APP pin in in HIGH state
+     */
     task_created = xTaskCreatePinnedToCore(usb_lib_task,
                                            "usb_events",
-                                           4096,
+                                           4096, // Consider tuning this stack size based on profiling
                                            xTaskGetCurrentTaskHandle(),
                                            2, NULL, 0);
     assert(task_created == pdTRUE);
 
     // Wait for notification from usb_lib_task to proceed
-    ulTaskNotifyTake(false, 1000);
+    ulTaskNotifyTake(false, 1000 / portTICK_PERIOD_MS); // Use portTICK_PERIOD_MS for clarity
 
     /*
-    * HID host driver configuration
-    * - create background task for handling low level event inside the HID driver
-    * - provide the device callback to get new HID Device connection event
-    */
+     * HID host driver configuration
+     * - create background task for handling low level event inside the HID driver
+     * - provide the device callback to get new HID Device connection event
+     */
     const hid_host_driver_config_t hid_host_driver_config = {
         .create_background_task = true,
         .task_priority = 5,
-        .stack_size = 4096,
+        .stack_size = 4096, // Consider tuning this stack size based on profiling
         .core_id = 0,
         .callback = hid_host_device_callback,
         .callback_arg = NULL
@@ -721,19 +774,12 @@ void app_main(void)
 
     // Create queue
     app_event_queue = xQueueCreate(10, sizeof(app_event_queue_t));
-
-    ESP_LOGI(TAG, "Waiting for HID Device to be connected");
-    int udp_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-    if (udp_sock < 0) {
-    ESP_LOGE(TAG, "Unable to create socket");
-    return;
+    if (app_event_queue == NULL) {
+        ESP_LOGE(TAG, "Failed to create app_event_queue");
+        // Handle error, perhaps restart or halt
     }
 
-    struct sockaddr_in pc_addr;
-    pc_addr.sin_family = AF_INET;
-    pc_addr.sin_port = htons(PC_UDP_PORT);
-    inet_pton(AF_INET, PC_IP_ADDR, &pc_addr.sin_addr);
-
+    ESP_LOGI(TAG, "Waiting for HID Device to be connected");
 
     while (1) {
         // Wait queue
@@ -762,6 +808,20 @@ void app_main(void)
     ESP_LOGI(TAG, "HID Driver uninstall");
     ESP_ERROR_CHECK(hid_host_uninstall());
     gpio_isr_handler_remove(APP_QUIT_PIN);
-    xQueueReset(app_event_queue);
-    vQueueDelete(app_event_queue);
+    
+    // Check if queue exists before resetting/deleting
+    if (app_event_queue != NULL) {
+        xQueueReset(app_event_queue);
+        vQueueDelete(app_event_queue);
+        app_event_queue = NULL; // Prevent use-after-free
+    }
+
+    // ✅ Close the UDP socket
+    if (udp_sock >= 0) {
+        ESP_LOGI(TAG, "Closing UDP socket");
+        close(udp_sock);
+        udp_sock = -1; // Indicate that the socket is closed
+    }
+
+    ESP_LOGI(TAG, "Application finished.");
 }
