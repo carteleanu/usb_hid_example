@@ -225,6 +225,10 @@ void wifi_init_sta(void)
     };
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    // ✅ Set a custom MAC address - make sure each ESP32 has a unique one
+    uint8_t custom_mac[6] = { 0xAA, 0xBB, 0xCC, 0x00, 0x00, 0x03 };  // CHANGE last byte per device!
+    ESP_ERROR_CHECK(esp_wifi_set_mac(WIFI_IF_STA, custom_mac));
+
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "Wi-Fi init finished.");
